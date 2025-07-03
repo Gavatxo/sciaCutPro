@@ -1,176 +1,199 @@
-import ApplicationLogo from "@/Components/ApplicationLogo";
-import Dropdown from "@/Components/Dropdown";
-import NavLink from "@/Components/NavLink";
-import ResponsiveNavLink from "@/Components/ResponsiveNavLink";
 import { Link, usePage } from "@inertiajs/react";
 import { useState } from "react";
+import Dropdown from "@/Components/Dropdown";
 
 export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+    const { auth, flash } = usePage().props;
+    const user = auth.user;
 
-    const [showingNavigationDropdown, setShowingNavigationDropdown] =
-        useState(false);
+    const navigation = [
+        {
+            name: "Dashboard",
+            href: route("dashboard"),
+            icon: "📊",
+            current: route().current("dashboard"),
+        },
+        {
+            name: "Clients",
+            href: route("clients.index"),
+            icon: "👥",
+            current: route().current("clients.*"),
+        },
+        {
+            name: "Devis",
+            href: route("devis.index"),
+            icon: "📋",
+            current: route().current("devis.*"),
+        },
+        {
+            name: "Factures",
+            href: "#",
+            icon: "🧾",
+            current: false,
+        },
+        {
+            name: "Catalogue",
+            href: "#",
+            icon: "📝",
+            current: false,
+        },
+        {
+            name: "Statistiques",
+            href: "#",
+            icon: "📈",
+            current: false,
+        },
+        {
+            name: "Configuration",
+            href: "#",
+            icon: "⚙️",
+            current: false,
+        },
+    ];
+
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-            <nav className="border-b border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div className="flex h-16 justify-between">
-                        <div className="flex">
-                            <div className="flex shrink-0 items-center">
-                                <Link href="/">
-                                    <ApplicationLogo className="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
-                                </Link>
-                            </div>
-
-                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink
-                                    href={route("dashboard")}
-                                    active={route().current("dashboard")}
-                                >
-                                    Dashboard
-                                </NavLink>
-                            </div>
+        <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-5">
+            <div className="container max-w-7xl mx-auto">
+                {/* Header */}
+                <header className="bg-white rounded-2xl p-8 mb-8 shadow-lg">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                            <span className="text-4xl mr-3">⚡</span>
+                            <span className="text-3xl font-bold text-gray-800">
+                                SciaCut Pro
+                            </span>
                         </div>
 
-                        <div className="hidden sm:ms-6 sm:flex sm:items-center">
-                            <div className="relative ms-3">
-                                <Dropdown>
-                                    <Dropdown.Trigger>
-                                        <span className="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                                            >
-                                                {user.name}
+                        {/* Desktop User Menu */}
+                        <div className="hidden md:flex items-center gap-4">
+                            <span className="text-gray-700">{user.name}</span>
+                            <Dropdown>
+                                <Dropdown.Trigger>
+                                    <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold cursor-pointer hover:shadow-lg transition-all">
+                                        {user.name
+                                            ? user.name.charAt(0).toUpperCase()
+                                            : "U"}
+                                    </div>
+                                </Dropdown.Trigger>
 
-                                                <svg
-                                                    className="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fillRule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clipRule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </Dropdown.Trigger>
-
-                                    <Dropdown.Content>
-                                        <Dropdown.Link
-                                            href={route("profile.edit")}
-                                        >
-                                            Profile
-                                        </Dropdown.Link>
-                                        <Dropdown.Link
-                                            href={route("logout")}
-                                            method="post"
-                                            as="button"
-                                        >
-                                            Log Out
-                                        </Dropdown.Link>
-                                    </Dropdown.Content>
-                                </Dropdown>
-                            </div>
+                                <Dropdown.Content>
+                                    <Dropdown.Link href={route("profile.edit")}>
+                                        👤 Profil
+                                    </Dropdown.Link>
+                                    <Dropdown.Link
+                                        href={route("logout")}
+                                        method="post"
+                                        as="button"
+                                    >
+                                        🚪 Déconnexion
+                                    </Dropdown.Link>
+                                </Dropdown.Content>
+                            </Dropdown>
                         </div>
 
-                        <div className="-me-2 flex items-center sm:hidden">
+                        {/* Mobile Menu Button */}
+                        <div className="md:hidden">
                             <button
                                 onClick={() =>
-                                    setShowingNavigationDropdown(
-                                        (previousState) => !previousState
-                                    )
+                                    setShowMobileMenu(!showMobileMenu)
                                 }
-                                className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-400 dark:focus:bg-gray-900 dark:focus:text-gray-400"
+                                className="text-gray-600 hover:text-gray-800 focus:outline-none"
                             >
                                 <svg
-                                    className="h-6 w-6"
-                                    stroke="currentColor"
+                                    className="w-6 h-6"
                                     fill="none"
+                                    stroke="currentColor"
                                     viewBox="0 0 24 24"
                                 >
                                     <path
-                                        className={
-                                            !showingNavigationDropdown
-                                                ? "inline-flex"
-                                                : "hidden"
-                                        }
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         strokeWidth="2"
                                         d="M4 6h16M4 12h16M4 18h16"
                                     />
-                                    <path
-                                        className={
-                                            showingNavigationDropdown
-                                                ? "inline-flex"
-                                                : "hidden"
-                                        }
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
                                 </svg>
                             </button>
                         </div>
                     </div>
-                </div>
-
-                <div
-                    className={
-                        (showingNavigationDropdown ? "block" : "hidden") +
-                        " sm:hidden"
-                    }
-                >
-                    <div className="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            href={route("dashboard")}
-                            active={route().current("dashboard")}
-                        >
-                            Dashboard
-                        </ResponsiveNavLink>
-                    </div>
-
-                    <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
-                        <div className="px-4">
-                            <div className="text-base font-medium text-gray-800 dark:text-gray-200">
-                                {user.name}
-                            </div>
-                            <div className="text-sm font-medium text-gray-500">
-                                {user.email}
-                            </div>
-                        </div>
-
-                        <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route("profile.edit")}>
-                                Profile
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                method="post"
-                                href={route("logout")}
-                                as="button"
-                            >
-                                Log Out
-                            </ResponsiveNavLink>
-                        </div>
-                    </div>
-                </div>
-            </nav>
-
-            {header && (
-                <header className="bg-white shadow dark:bg-gray-800">
-                    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                        {header}
-                    </div>
                 </header>
-            )}
 
-            <main>{children}</main>
+                {/* Flash Messages */}
+                {flash.success && (
+                    <div className="bg-green-500 text-white p-4 rounded-lg mb-6 shadow-lg">
+                        <div className="flex items-center gap-2">
+                            <span>✅</span>
+                            {flash.success}
+                        </div>
+                    </div>
+                )}
+                {flash.error && (
+                    <div className="bg-red-500 text-white p-4 rounded-lg mb-6 shadow-lg">
+                        <div className="flex items-center gap-2">
+                            <span>❌</span>
+                            {flash.error}
+                        </div>
+                    </div>
+                )}
+
+                {/* Mobile Menu */}
+                {showMobileMenu && (
+                    <div className="md:hidden bg-white rounded-2xl p-5 mb-6 shadow-lg">
+                        <div className="space-y-2">
+                            {navigation.map((item) => (
+                                <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    className={`flex items-center p-3 rounded-lg transition-all ${
+                                        item.current
+                                            ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white transform translate-x-1"
+                                            : "text-gray-700 hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-600 hover:text-white hover:transform hover:translate-x-1"
+                                    }`}
+                                    onClick={() => setShowMobileMenu(false)}
+                                >
+                                    <span className="mr-3 text-lg">
+                                        {item.icon}
+                                    </span>
+                                    {item.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr] gap-8">
+                    {/* Desktop Sidebar */}
+                    <nav className="hidden lg:block bg-white rounded-2xl p-5 h-fit shadow-lg">
+                        {navigation.map((item) => (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className={`flex items-center p-3 mb-2 rounded-lg transition-all ${
+                                    item.current
+                                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white transform translate-x-1"
+                                        : "text-gray-700 hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-600 hover:text-white hover:transform hover:translate-x-1"
+                                }`}
+                            >
+                                <span className="mr-3 text-lg">
+                                    {item.icon}
+                                </span>
+                                {item.name}
+                            </Link>
+                        ))}
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="bg-white rounded-2xl shadow-lg">
+                        {header && (
+                            <header className="px-8 py-6 border-b-2 border-gray-100">
+                                {header}
+                            </header>
+                        )}
+                        <div className="p-8">{children}</div>
+                    </main>
+                </div>
+            </div>
         </div>
     );
 }
