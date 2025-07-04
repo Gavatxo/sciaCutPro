@@ -9,6 +9,8 @@ class Devis extends Model
     protected $fillable = [
         'company_id',
         'client_id',
+        'chantier_name',
+        'chantier_address',
         'number',
         'date',
         'validity_date',

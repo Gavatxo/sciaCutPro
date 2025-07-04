@@ -9,9 +9,12 @@ class LigneDevis extends Model
     protected $fillable = [
         'devis_id',
         'prestation_id',
+        'description',
+        'description_detail',
         'quantity',
         'unit_price',
-        'total_price',
+        'total',
+        'order'
     ];
 
     public function devis()

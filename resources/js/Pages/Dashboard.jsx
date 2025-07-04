@@ -17,7 +17,7 @@ export default function Dashboard({ stats, activites }) {
                         Tableau de bord
                     </h1>
                     <Link
-                        href={route("devis.create")}
+                        href="/devis/create"
                         className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:transform hover:-translate-y-0.5 hover:shadow-lg transition-all flex items-center gap-2"
                     >
                         <span>➕</span>
@@ -96,7 +96,7 @@ export default function Dashboard({ stats, activites }) {
                             Créez votre premier devis pour commencer !
                         </p>
                         <Link
-                            href={route("devis.create")}
+                            href="/devis/create"
                             className="inline-block mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:shadow-lg transition-all"
                         >
                             Créer un devis

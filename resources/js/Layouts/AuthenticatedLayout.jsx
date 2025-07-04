@@ -3,27 +3,36 @@ import { useState } from "react";
 import Dropdown from "@/Components/Dropdown";
 
 export default function AuthenticatedLayout({ header, children }) {
-    const { auth, flash } = usePage().props;
+    const { auth, flash, url } = usePage().props;
     const user = auth.user;
+
+    // Helper pour vérifier la route actuelle
+    const isCurrentRoute = (path) => {
+        const currentPath = window.location.pathname;
+        if (path === "/dashboard") {
+            return currentPath === "/dashboard";
+        }
+        return currentPath.startsWith(path);
+    };
 
     const navigation = [
         {
             name: "Dashboard",
-            href: route("dashboard"),
+            href: "/dashboard",
             icon: "📊",
-            current: route().current("dashboard"),
+            current: isCurrentRoute("/dashboard"),
         },
         {
             name: "Clients",
-            href: route("clients.index"),
+            href: "/clients",
             icon: "👥",
-            current: route().current("clients.*"),
+            current: isCurrentRoute("/clients"),
         },
         {
             name: "Devis",
-            href: route("devis.index"),
+            href: "/devis",
             icon: "📋",
-            current: route().current("devis.*"),
+            current: isCurrentRoute("/devis"),
         },
         {
             name: "Factures",
@@ -79,11 +88,11 @@ export default function AuthenticatedLayout({ header, children }) {
                                 </Dropdown.Trigger>
 
                                 <Dropdown.Content>
-                                    <Dropdown.Link href={route("profile.edit")}>
+                                    <Dropdown.Link href="/profile">
                                         👤 Profil
                                     </Dropdown.Link>
                                     <Dropdown.Link
-                                        href={route("logout")}
+                                        href="/logout"
                                         method="post"
                                         as="button"
                                     >
@@ -120,7 +129,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 </header>
 
                 {/* Flash Messages */}
-                {flash.success && (
+                {flash && flash.success && (
                     <div className="bg-green-500 text-white p-4 rounded-lg mb-6 shadow-lg">
                         <div className="flex items-center gap-2">
                             <span>✅</span>
@@ -128,7 +137,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         </div>
                     </div>
                 )}
-                {flash.error && (
+                {flash && flash.error && (
                     <div className="bg-red-500 text-white p-4 rounded-lg mb-6 shadow-lg">
                         <div className="flex items-center gap-2">
                             <span>❌</span>
