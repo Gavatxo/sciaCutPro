@@ -12,6 +12,7 @@ class LigneDevis extends Model
         'description',
         'description_detail',
         'quantity',
+        'unit',
         'unit_price',
         'total',
         'order'
