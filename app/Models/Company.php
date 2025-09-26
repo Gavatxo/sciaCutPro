@@ -12,6 +12,7 @@ class Company extends Model
         'phone',
         'address',
         'siret',
+        'user_id'
     ];
 
     public function clients()
@@ -22,5 +23,10 @@ class Company extends Model
     public function devis()
     {
         return $this->hasMany(Devis::class);
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
     }
 }
