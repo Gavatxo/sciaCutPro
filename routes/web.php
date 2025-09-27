@@ -1,5 +1,7 @@
 <?php
 
+// routes/web.php
+
 use Inertia\Inertia;
 use App\Models\Client;
 use Illuminate\Support\Facades\Route;
@@ -11,13 +13,15 @@ use App\Http\Controllers\DevisController;
 
 Route::redirect('/', '/dashboard');
 
-
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('clients', ClientController::class);
-    Route::resource('devis', DevisController::class);
+    Route::resource('devis', DevisController::class)->parameters(['devis' => 'devis']);
 
+    // ✅ NOUVELLES ROUTES pour la gestion des statuts
+    Route::patch('/devis/{devis}/status', [DevisController::class, 'updateStatus'])->name('devis.update-status');
+    Route::post('/devis/{devis}/send', [DevisController::class, 'send'])->name('devis.send');
 });
 
 Route::middleware('auth')->group(function () {

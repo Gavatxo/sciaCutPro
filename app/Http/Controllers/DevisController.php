@@ -1,5 +1,7 @@
 <?php
 
+// app/Http/Controllers/DevisController.php
+
 namespace App\Http\Controllers;
 
 use App\Models\Devis;
@@ -10,67 +12,66 @@ use Inertia\Inertia;
 
 class DevisController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
         $companyId = auth()->user()->company_id;
-        
-        // Construction de la requête avec filtres
-        $query = Devis::where('company_id', $companyId)
-            ->with(['client:id,name'])
-            ->orderBy('created_at', 'desc');
-        
+
+        $query = Devis::where('company_id', $companyId)->with(['client']);
+
         // Filtres
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('numero', 'like', "%{$search}%")
-                  ->orWhere('chantier_name', 'like', "%{$search}%")
-                  ->orWhereHas('client', function($clientQuery) use ($search) {
-                      $clientQuery->where('name', 'like', "%{$search}%");
+        if (request('search')) {
+            $query->where(function ($q) {
+                $q->where('numero', 'like', '%' . request('search') . '%')
+                  ->orWhere('chantier_name', 'like', '%' . request('search') . '%')
+                  ->orWhereHas('client', function ($clientQuery) {
+                      $clientQuery->where('name', 'like', '%' . request('search') . '%');
                   });
             });
         }
-        
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+
+        if (request('status')) {
+            $query->where('status', request('status'));
         }
-        
-        // Pagination
-        $devis = $query->paginate(15)->withQueryString();
-        
-        // Statistiques pour les KPI
-        $stats = [
-            'total' => Devis::where('company_id', $companyId)->count(),
-            'en_attente' => Devis::where('company_id', $companyId)
-                ->where('status', 'envoye')->count(),
-            'signes' => Devis::where('company_id', $companyId)
-                ->where('status', 'signe')->count(),
-            'montant_total' => Devis::where('company_id', $companyId)
-                ->where('status', 'signe')
-                ->sum('total_ttc'),
-        ];
-        
+
+        // Tri
+        $sortField = request('sort_field', 'created_at');
+        $sortDirection = request('sort_direction', 'desc');
+        $query->orderBy($sortField, $sortDirection);
+
+        $devis = $query->paginate(10)->withQueryString();
+
         return Inertia::render('Devis/Index', [
             'devis' => $devis,
-            'filters' => [
-                'search' => $request->search,
-                'status' => $request->status,
-            ],
-            'stats' => $stats,
+            'filters' => request()->only(['search', 'status']),
+            'stats' => [
+                'total' => Devis::where('company_id', $companyId)->count(),
+                'brouillon' => Devis::where('company_id', $companyId)->where('status', 'brouillon')->count(),
+                'envoye' => Devis::where('company_id', $companyId)->where('status', 'envoye')->count(),
+                'signe' => Devis::where('company_id', $companyId)->where('status', 'signe')->count(),
+                'total_ca' => Devis::where('company_id', $companyId)->where('status', 'signe')->sum('total_ttc'),
+            ]
         ]);
     }
 
     public function create()
     {
         $companyId = auth()->user()->company_id;
-        
-        // Générer le prochain numéro pour affichage
-        $nextNumero = $this->generateNextNumero($companyId);
+
+        // Récupérer le client_id depuis l'URL si présent
+        $preselectedClientId = request('client_id');
+        $selectedClient = null;
+
+        if ($preselectedClientId) {
+            $selectedClient = Client::where('id', $preselectedClientId)
+                ->where('company_id', $companyId)
+                ->first();
+        }
 
         return Inertia::render('Devis/Create', [
             'clients' => Client::where('company_id', $companyId)->orderBy('name')->get(),
             'prestations' => Prestation::where('company_id', $companyId)->orderBy('name')->get(),
-            'nextNumero' => $nextNumero
+            'nextNumero' => $this->generateNextNumero($companyId),
+            'selectedClient' => $selectedClient, // Client présélectionné
         ]);
     }
 
@@ -91,91 +92,70 @@ class DevisController extends Controller
         ]);
 
         $companyId = auth()->user()->company_id;
-        
+
         // Vérifier que le client appartient à la bonne entreprise
         $client = Client::where('id', $validated['client_id'])
                     ->where('company_id', $companyId)
                     ->firstOrFail();
-        
-        try {
-            // ✅ Générer le numéro AU MOMENT de la création (pas avant!)
-            $numeroDevis = $this->generateNextNumero($companyId);
-            
-            Log::info('Création devis', [
-                'company_id' => $companyId,
-                'numero_genere' => $numeroDevis,
-                'client_id' => $validated['client_id']
+
+        // Générer le numéro AVANT la création
+        $numeroDevis = $this->generateNextNumero($companyId);
+
+        // Créer le devis avec tous les champs requis
+        $devis = Devis::create([
+            'company_id' => $companyId,
+            'client_id' => $validated['client_id'],
+            'numero' => $numeroDevis,
+            'chantier_name' => $validated['chantier_name'],
+            'chantier_address' => $validated['chantier_address'],
+            'date_intervention' => $validated['date_intervention'],
+            'notes' => $validated['notes'],
+            'total_ht' => 0,
+            'tva_rate' => 20.00,
+            'total_ttc' => 0,
+            'status' => 'brouillon',
+            'validity_days' => 30,
+        ]);
+
+        // Créer les lignes
+        $totalHt = 0;
+        foreach ($validated['lignes'] as $index => $ligne) {
+            $total = $ligne['quantity'] * $ligne['unit_price'];
+            $totalHt += $total;
+
+            $devis->lignes()->create([
+                'description' => $ligne['description'],
+                'description_detail' => $ligne['description_detail'] ?? null,
+                'quantity' => $ligne['quantity'],
+                'unit' => $ligne['unit'],
+                'unit_price' => $ligne['unit_price'],
+                'total' => $total,
+                'order' => $index + 1,
+                'prestation_id' => null,
             ]);
-            
-            // Créer le devis avec tous les champs requis
-            $devis = Devis::create([
-                'company_id' => $companyId,
-                'client_id' => $validated['client_id'],
-                'numero' => $numeroDevis, 
-                'chantier_name' => $validated['chantier_name'],
-                'chantier_address' => $validated['chantier_address'],
-                'date_intervention' => $validated['date_intervention'],
-                'notes' => $validated['notes'],
-                'total_ht' => 0,
-                'tva_rate' => 20.00,
-                'total_ttc' => 0,
-                'status' => 'brouillon',
-                'validity_days' => 30,
-            ]);
-
-            // Créer les lignes de devis
-            $totalHt = 0;
-            foreach ($validated['lignes'] as $index => $ligne) {
-                $total = $ligne['quantity'] * $ligne['unit_price'];
-                $totalHt += $total;
-
-                $devis->lignes()->create([
-                    'description' => $ligne['description'],
-                    'description_detail' => $ligne['description_detail'] ?? null,
-                    'prestation_id' => null, // Optionnel
-                    'quantity' => $ligne['quantity'],
-                    'unit' => $ligne['unit'],
-                    'unit_price' => $ligne['unit_price'],
-                    'total' => $total,
-                    'order' => $index + 1,
-                ]);
-            }
-
-            // Mettre à jour les totaux
-            $tva = $totalHt * 0.20;
-            $totalTtc = $totalHt + $tva;
-
-            $devis->update([
-                'total_ht' => $totalHt,
-                'total_ttc' => $totalTtc,
-            ]);
-
-            Log::info('Devis créé avec succès', [
-                'devis_id' => $devis->id,
-                'numero' => $devis->numero
-            ]);
-
-            return redirect()->route('devis.index')
-                ->with('success', "Devis #{$devis->numero} créé avec succès !");
-                
-        } catch (\Exception $e) {
-            Log::error('Erreur création devis', [
-                'error' => $e->getMessage(),
-                'company_id' => $companyId
-            ]);
-            
-            return back()->withErrors(['error' => 'Erreur lors de la création du devis: ' . $e->getMessage()]);
         }
+
+        // Mettre à jour les totaux
+        $tva = $totalHt * 0.20;
+        $totalTtc = $totalHt + $tva;
+
+        $devis->update([
+            'total_ht' => $totalHt,
+            'total_ttc' => $totalTtc,
+        ]);
+
+        return redirect()->route('devis.index')
+            ->with('success', "Devis #{$devis->numero} créé avec succès !");
     }
 
     public function show(Devis $devis)
     {
-        // Vérifier que le devis appartient à la bonne entreprise
-        if ($devis->company_id !== auth()->user()->company_id) {
-            abort(403);
-        }
+        // // Vérifier que le devis appartient à la bonne entreprise
+        // if ($devis->company_id !== auth()->user()->company_id) {
+        //     abort(403);
+        // }
 
-        $devis->load(['client', 'lignes' => function($query) {
+        $devis->load(['client', 'lignes' => function ($query) {
             $query->orderBy('order');
         }]);
 
@@ -186,18 +166,18 @@ class DevisController extends Controller
 
     public function edit(Devis $devis)
     {
-        if ($devis->company_id !== auth()->user()->company_id) {
-            abort(403);
-        }
+        // if ($devis->company_id !== auth()->user()->company_id) {
+        //     abort(403);
+        // }
 
-        // Seuls les devis en brouillon peuvent être modifiés
-        if ($devis->status !== 'brouillon') {
+        // ✅ MODIFICATION : Permettre l'édition pour plus de statuts
+        if (!in_array($devis->status, ['brouillon', 'envoye'])) {
             return redirect()->route('devis.show', $devis)
-                ->with('error', 'Seuls les devis en brouillon peuvent être modifiés.');
+                ->with('error', 'Ce devis ne peut plus être modifié (statut: ' . $devis->status . ').');
         }
 
         $companyId = auth()->user()->company_id;
-        $devis->load(['lignes' => function($query) {
+        $devis->load(['lignes' => function ($query) {
             $query->orderBy('order');
         }]);
 
@@ -214,9 +194,9 @@ class DevisController extends Controller
             abort(403);
         }
 
-        if ($devis->status !== 'brouillon') {
+        if (!in_array($devis->status, ['brouillon', 'envoye'])) {
             return redirect()->route('devis.show', $devis)
-                ->with('error', 'Seuls les devis en brouillon peuvent être modifiés.');
+                ->with('error', 'Ce devis ne peut plus être modifié.');
         }
 
         $validated = $request->validate([
@@ -258,6 +238,7 @@ class DevisController extends Controller
                 'unit_price' => $ligne['unit_price'],
                 'total' => $total,
                 'order' => $index + 1,
+                'prestation_id' => null,
             ]);
         }
 
@@ -272,6 +253,92 @@ class DevisController extends Controller
 
         return redirect()->route('devis.show', $devis)
             ->with('success', 'Devis modifié avec succès !');
+    }
+
+    /**
+     * Changer le statut d'un devis
+     */
+    public function updateStatus(Request $request, Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:brouillon,envoye,signe,refuse,expire',
+            'notes' => 'nullable|string',
+            'signed_by' => 'nullable|string|required_if:status,signe',
+        ]);
+
+        // Logique de validation des transitions de statut
+        $allowedTransitions = [
+            'brouillon' => ['envoye'],
+            'envoye' => ['signe', 'refuse', 'expire'],
+            'signe' => [], // Un devis signé ne peut plus changer de statut
+            'refuse' => ['brouillon'], // Un devis refusé peut redevenir brouillon
+            'expire' => ['brouillon'], // Un devis expiré peut redevenir brouillon
+        ];
+
+        if (!in_array($validated['status'], $allowedTransitions[$devis->status] ?? [])) {
+            return redirect()->route('devis.show', $devis)
+                ->with('error', 'Transition de statut non autorisée.');
+        }
+
+        // Préparer les données de mise à jour
+        $updateData = ['status' => $validated['status']];
+
+        // Ajouter les champs spécifiques selon le statut
+        switch ($validated['status']) {
+            case 'envoye':
+                $updateData['date_envoi'] = now();
+                break;
+            case 'signe':
+                $updateData['date_signature'] = now();
+                $updateData['signed_by'] = $validated['signed_by'];
+                break;
+        }
+
+        // Ajouter les notes si fournies
+        if (!empty($validated['notes'])) {
+            $updateData['notes'] = $devis->notes . "\n\n" . now()->format('d/m/Y H:i') . " - " . $validated['notes'];
+        }
+
+        $devis->update($updateData);
+
+        $statusLabels = [
+            'brouillon' => 'brouillon',
+            'envoye' => 'envoyé',
+            'signe' => 'signé',
+            'refuse' => 'refusé',
+            'expire' => 'expiré',
+        ];
+
+        return redirect()->route('devis.show', $devis)
+            ->with('success', "Devis #{$devis->numero} marqué comme {$statusLabels[$validated['status']]} !");
+    }
+
+    /**
+     * Envoyer le devis par email (placeholder)
+     */
+    public function send(Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        if ($devis->status !== 'brouillon') {
+            return redirect()->route('devis.show', $devis)
+                ->with('error', 'Seuls les devis en brouillon peuvent être envoyés.');
+        }
+
+        // TODO: Implémenter l'envoi par email
+        $devis->update([
+            'status' => 'envoye',
+            'date_envoi' => now(),
+        ]);
+
+        return redirect()->route('devis.show', $devis)
+            ->with('success', "Devis #{$devis->numero} envoyé avec succès !");
     }
 
     public function destroy(Devis $devis)
@@ -296,34 +363,18 @@ class DevisController extends Controller
     private function generateNextNumero($companyId)
     {
         $year = date('Y');
-        
-        // Trouver le dernier numéro de l'année pour cette entreprise
         $lastDevis = Devis::where('company_id', $companyId)
             ->where('numero', 'like', $year . '-%')
-            ->orderByRaw('CAST(SUBSTRING(numero, 6) AS UNSIGNED) DESC') // Tri numérique
+            ->orderBy('numero', 'desc')
             ->first();
 
-        if ($lastDevis && $lastDevis->numero) {
-            // Extraire le numéro séquentiel
-            $parts = explode('-', $lastDevis->numero);
-            if (count($parts) >= 2) {
-                $lastNumber = (int) end($parts);
-                $nextNumber = $lastNumber + 1;
-            } else {
-                $nextNumber = 1;
-            }
+        if ($lastDevis) {
+            $lastNumber = (int) substr($lastDevis->numero, -3);
+            $nextNumber = $lastNumber + 1;
         } else {
             $nextNumber = 1;
         }
 
-        $numero = $year . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
-        
-        Log::info('Numéro généré', [
-            'company_id' => $companyId,
-            'last_devis' => $lastDevis ? $lastDevis->numero : 'aucun',
-            'numero_genere' => $numero
-        ]);
-        
-        return $numero;
+        return $year . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
     }
 }

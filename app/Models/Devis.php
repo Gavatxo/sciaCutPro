@@ -27,6 +27,9 @@ class Devis extends Model
         'status',
         'signed_at',
         'signature_data',
+        'date_envoi',        // ← Important
+        'date_signature',    // ← Important
+        'signed_by',
     ];
 
     protected $casts = [
@@ -34,7 +37,7 @@ class Devis extends Model
         'signed_at' => 'datetime',
         'signature_data' => 'array',
         'total_ht' => 'decimal:2',
-        'tva_rate' => 'decimal:2', 
+        'tva_rate' => 'decimal:2',
         'total_ttc' => 'decimal:2',
         'validity_days' => 'integer',
     ];
@@ -61,7 +64,7 @@ class Devis extends Model
         if (!$this->created_at || !$this->validity_days) {
             return null;
         }
-        
+
         return $this->created_at->addDays($this->validity_days);
     }
 
@@ -97,10 +100,10 @@ class Devis extends Model
 
     public function scopeSearch($query, $search)
     {
-        return $query->where(function($q) use ($search) {
+        return $query->where(function ($q) use ($search) {
             $q->where('numero', 'like', "%{$search}%")
               ->orWhere('chantier_name', 'like', "%{$search}%")
-              ->orWhereHas('client', function($clientQuery) use ($search) {
+              ->orWhereHas('client', function ($clientQuery) use ($search) {
                   $clientQuery->where('name', 'like', "%{$search}%");
               });
         });
