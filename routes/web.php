@@ -22,6 +22,10 @@ Route::middleware('auth')->group(function () {
     // ✅ NOUVELLES ROUTES pour la gestion des statuts
     Route::patch('/devis/{devis}/status', [DevisController::class, 'updateStatus'])->name('devis.update-status');
     Route::post('/devis/{devis}/send', [DevisController::class, 'send'])->name('devis.send');
+
+
+    Route::get('/clients/{client}/devis', [ClientController::class, 'devis'])->name('clients.devis');
+
 });
 
 Route::middleware('auth')->group(function () {

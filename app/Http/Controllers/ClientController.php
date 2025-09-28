@@ -205,4 +205,46 @@ class ClientController extends Controller
         return redirect()->route('clients.index')
             ->with('success', "Client {$clientName} supprimé avec succès !");
     }
+
+    public function devis(Client $client)
+    {
+        if ($client->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        $query = $client->devis()->with(['client']);
+
+        // Filtres
+        if (request('search')) {
+            $query->where(function ($q) {
+                $q->where('numero', 'like', '%' . request('search') . '%')
+                  ->orWhere('chantier_name', 'like', '%' . request('search') . '%');
+            });
+        }
+
+        if (request('status')) {
+            $query->where('status', request('status'));
+        }
+
+        // Tri
+        $sortField = request('sort_field', 'created_at');
+        $sortDirection = request('sort_direction', 'desc');
+        $query->orderBy($sortField, $sortDirection);
+
+        $devis = $query->paginate(10)->withQueryString();
+
+        return Inertia::render('Clients/Devis', [
+            'client' => $client,
+            'devis' => $devis,
+            'filters' => request()->only(['search', 'status']),
+            'stats' => [
+                'total' => $client->devis()->count(),
+                'brouillon' => $client->devis()->where('status', 'brouillon')->count(),
+                'envoye' => $client->devis()->where('status', 'envoye')->count(),
+                'signe' => $client->devis()->where('status', 'signe')->count(),
+                'refuse' => $client->devis()->where('status', 'refuse')->count(),
+                'total_ca' => $client->devis()->where('status', 'signe')->sum('total_ttc'),
+            ]
+        ]);
+    }
 }

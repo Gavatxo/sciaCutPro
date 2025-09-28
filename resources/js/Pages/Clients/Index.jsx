@@ -354,7 +354,7 @@ export default function ClientsIndex({ clients, filters, stats }) {
                                                         Voir
                                                     </Link>
                                                     <Link
-                                                        href={`/devis/create?client_id=${client.id}`}
+                                                        href={`/clients/${client.id}/devis`}
                                                         className="inline-flex items-center px-3 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg hover:bg-green-200 transition-colors"
                                                     >
                                                         <span className="mr-1">
