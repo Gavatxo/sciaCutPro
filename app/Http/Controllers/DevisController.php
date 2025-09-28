@@ -4,11 +4,12 @@
 
 namespace App\Http\Controllers;
 
+use Inertia\Inertia;
 use App\Models\Devis;
 use App\Models\Client;
 use App\Models\Prestation;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class DevisController extends Controller
 {
@@ -376,5 +377,161 @@ class DevisController extends Controller
         }
 
         return $year . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+ * Générer et télécharger le devis en PDF
+ */
+    public function downloadPdf(Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        // Charger les relations
+        $devis->load(['client', 'lignes']);
+
+        // Créer une version simplifiée des données
+        $data = [
+            'numero' => $devis->numero,
+            'chantier_name' => $devis->chantier_name,
+            'total_ht' => $devis->total_ht,
+            'total_ttc' => $devis->total_ttc,
+            'client_name' => $devis->client->name ?? 'Client non trouvé',
+            'lignes_count' => $devis->lignes->count()
+        ];
+
+        // Utiliser un template simple qui fonctionne
+        $html = "
+    <h1>DEVIS {$data['numero']}</h1>
+    <p>Client: {$data['client_name']}</p>
+    <p>Chantier: {$data['chantier_name']}</p>
+    <p>Nombre de lignes: {$data['lignes_count']}</p>
+    <p>Total TTC: {$data['total_ttc']} €</p>
+    ";
+
+        try {
+            $pdf = Pdf::loadHTML($html);
+
+            // Marquer comme envoyé si c'était un brouillon
+            if ($devis->status === 'brouillon') {
+                $devis->update([
+                    'status' => 'envoye',
+                    'date_envoi' => now()
+                ]);
+            }
+
+            return $pdf->download("devis-{$devis->numero}.pdf");
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+    /**
+     * Envoyer le devis par email
+     */
+    public function sendEmail(Request $request, Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'subject' => 'required|string|max:255',
+            'message' => 'required|string',
+            'send_copy' => 'boolean'
+        ]);
+
+        // Charger les relations nécessaires
+        $devis->load(['client', 'lignes' => function ($query) {
+            $query->orderBy('order');
+        }, 'company']);
+
+        // Récupérer le template de l'entreprise
+        $company = auth()->user()->company;
+        $template = $company->devis_template ?? 'default';
+
+        // Générer le PDF
+        $pdf = \PDF::loadView("pdf.devis.{$template}", [
+            'devis' => $devis,
+            'company' => $company
+        ]);
+
+        // Envoyer l'email avec le PDF en pièce jointe
+        \Mail::to($validated['email'])
+            ->cc($validated['send_copy'] ? auth()->user()->email : null)
+            ->send(new \App\Mail\DevisEmail(
+                $devis,
+                $validated['subject'],
+                $validated['message'],
+                $pdf->output()
+            ));
+
+        // Marquer comme envoyé
+        if ($devis->status === 'brouillon') {
+            $devis->update([
+                'status' => 'envoye',
+                'date_envoi' => now()
+            ]);
+        }
+
+        return redirect()->route('devis.show', $devis)
+            ->with('success', 'Devis envoyé avec succès !');
+    }
+
+    /**
+     * Prévisualiser le devis
+     */
+    public function preview(Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        // Charger les relations nécessaires
+        $devis->load(['client', 'lignes' => function ($query) {
+            $query->orderBy('order');
+        }, 'company']);
+
+        // Récupérer le template de l'entreprise
+        $company = auth()->user()->company;
+        $template = $company->devis_template ?? 'default';
+
+        return view("pdf.devis.{$template}", [
+            'devis' => $devis,
+            'company' => $company,
+            'preview' => true // Mode aperçu
+        ]);
+    }
+
+    /**
+     * Dupliquer un devis
+     */
+    public function duplicate(Devis $devis)
+    {
+        if ($devis->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+
+        // Créer une copie du devis
+        $newDevis = $devis->replicate();
+        $newDevis->numero = $this->generateNextNumero(auth()->user()->company_id);
+        $newDevis->status = 'brouillon';
+        $newDevis->date_envoi = null;
+        $newDevis->date_signature = null;
+        $newDevis->signed_by = null;
+        $newDevis->created_at = now();
+        $newDevis->updated_at = now();
+        $newDevis->save();
+
+        // Copier les lignes
+        foreach ($devis->lignes as $ligne) {
+            $newLigne = $ligne->replicate();
+            $newLigne->devis_id = $newDevis->id;
+            $newLigne->save();
+        }
+
+        return redirect()->route('devis.edit', $newDevis)
+            ->with('success', "Devis #{$newDevis->numero} créé par duplication !");
     }
 }

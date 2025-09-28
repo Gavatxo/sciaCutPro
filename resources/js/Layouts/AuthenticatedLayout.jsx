@@ -1,5 +1,3 @@
-// resources/js/Layouts/AuthenticatedLayout.jsx - Branding BuildFlow cohérent
-
 import { Link, usePage } from "@inertiajs/react";
 import { useState } from "react";
 import Dropdown from "@/Components/Dropdown";

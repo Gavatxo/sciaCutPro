@@ -3,6 +3,7 @@
 import React from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, router } from "@inertiajs/react";
+import DevisActions from "@/Components/Devis/DevisActions";
 
 export default function ShowDevis({ devis }) {
     const formatPrice = (price) => {
@@ -566,6 +567,9 @@ export default function ShowDevis({ devis }) {
                         </button>
                     </div>
                 )}
+                <div className="lg:col-span-1">
+                    <DevisActions devis={devis} />
+                </div>
             </div>
         </AuthenticatedLayout>
     );
